@@ -7,9 +7,13 @@ Main FastAPI application instance and configuration
 """
 
 app = FastAPI(
-    title="FastAPI Application",
-    description="Your API Description",
-    version="1.0.0"
+    title="py_crawl",
+    description="A modern, async web crawler built with FastAPI",
+    version="1.0.0",
+    # Redirect root to docs
+    docs_url="/",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 # Configure CORS
@@ -34,7 +38,7 @@ async def root():
     """
     return {"message": "Welcome to FastAPI Application"}
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 async def health_check():
     """
     Health check endpoint
