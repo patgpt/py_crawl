@@ -1,4 +1,13 @@
-# Stage 1: Build dependencies
+# Stage 1: Build Frontend
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/client
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+COPY client/ .
+RUN npm run build
+
+# Stage 2: Build Backend
 FROM python:3.11-slim AS builder
 
 # Set working directory
@@ -18,7 +27,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Stage 2: Runtime
+# Stage 3: Final Image
 FROM python:3.11-slim
 
 # Set working directory
@@ -46,6 +55,10 @@ COPY . .
 # Create necessary directories and set permissions
 RUN mkdir -p content debug downloads \
     && chown -R crawler:crawler /app
+
+# Copy frontend build
+COPY --from=frontend-builder /app/client/.next/static /app/client/.next/static
+COPY --from=frontend-builder /app/client/public /app/client/public
 
 # Switch to non-root user
 USER crawler

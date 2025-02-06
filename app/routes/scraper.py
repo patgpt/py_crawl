@@ -20,6 +20,7 @@ import zipfile
 import asyncio
 import psutil
 import structlog
+from app.utils.events import broadcaster
 
 from app.schemas.scraper import ScraperRequest, ScraperResponse, PageResult
 from app.config import settings
@@ -351,6 +352,15 @@ class Crawler:
             logger.error(f"Error extracting links from {current_url}: {str(e)}")
             return set()
 
+    async def send_update(self, message: str, progress: float = None):
+        """Send a progress update to connected clients"""
+        update = {
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+            "progress": progress
+        }
+        await broadcaster.broadcast(json.dumps(update))
+
     async def crawl(self) -> ScraperResponse:
         """Perform breadth-first crawl starting from base URL"""
         logger.info(
@@ -370,115 +380,126 @@ class Crawler:
 
         pages_processed = 0
 
-        while queue and pages_processed < self.request.crawler_config.max_pages:
-            url, depth = queue.popleft()
-            logger.info(f"Processing URL: {url} at depth {depth}")
-            logger.info(f"Pages processed: {pages_processed}/{self.request.crawler_config.max_pages}")
+        try:
+            await self.send_update("Starting crawl...", 0)
 
-            if depth > self.request.crawler_config.max_depth:
-                logger.debug(f"Skipping {url} - max depth reached")
-                continue
+            while queue and pages_processed < self.request.crawler_config.max_pages:
+                url, depth = queue.popleft()
+                await self.send_update(f"Processing {url}", progress=10)
+                logger.info(f"Processing URL: {url} at depth {depth}")
+                logger.info(f"Pages processed: {pages_processed}/{self.request.crawler_config.max_pages}")
 
-            if url in self.visited_urls:
-                logger.debug(f"Skipping {url} - already visited")
-                continue
+                if depth > self.request.crawler_config.max_depth:
+                    logger.debug(f"Skipping {url} - max depth reached")
+                    continue
 
-            try:
-                # Respect rate limiting
-                await self.rate_limiter.wait()
+                if url in self.visited_urls:
+                    logger.debug(f"Skipping {url} - already visited")
+                    continue
 
-                # Make request
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
-                    "Accept-Language": "en-US,en;q=0.5",
-                }
-
-                logger.debug(f"Requesting {url}")
                 try:
-                    response = requests.get(url, headers=headers, timeout=30)
-                    response.raise_for_status()
-                except requests.RequestException as e:
-                    logger.error(f"Request failed for {url}: {str(e)}")
-                    continue
-                except Exception as e:
-                    logger.error(f"Unexpected error processing {url}: {str(e)}")
-                    continue
+                    # Respect rate limiting
+                    await self.rate_limiter.wait()
 
-                # Parse HTML
-                soup = BeautifulSoup(response.text, 'lxml')
+                    # Make request
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
+                        "Accept-Language": "en-US,en;q=0.5",
+                    }
 
-                # Extract content
-                if self.request.selector:
-                    elements = soup.select(self.request.selector)
-                    if elements:
-                        html_content = "\n".join([str(elem) for elem in elements])
+                    logger.debug(f"Requesting {url}")
+                    try:
+                        response = requests.get(url, headers=headers, timeout=30)
+                        response.raise_for_status()
+                    except requests.RequestException as e:
+                        logger.error(f"Request failed for {url}: {str(e)}")
+                        continue
+                    except Exception as e:
+                        logger.error(f"Unexpected error processing {url}: {str(e)}")
+                        continue
+
+                    # Parse HTML
+                    soup = BeautifulSoup(response.text, 'lxml')
+
+                    # Extract content
+                    if self.request.selector:
+                        elements = soup.select(self.request.selector)
+                        if elements:
+                            html_content = "\n".join([str(elem) for elem in elements])
+                        else:
+                            logger.warning(f"No elements found for selector '{self.request.selector}' at {url}")
+                            html_content = str(soup.body) if soup.body else str(soup)
                     else:
-                        logger.warning(f"No elements found for selector '{self.request.selector}' at {url}")
                         html_content = str(soup.body) if soup.body else str(soup)
-                else:
-                    html_content = str(soup.body) if soup.body else str(soup)
 
-                # Convert to markdown and save
-                h = html2text.HTML2Text()
-                h.ignore_links = False
-                h.ignore_images = False
-                h.ignore_tables = False
-                h.body_width = 0
-                markdown_content = h.handle(html_content)
+                    # Convert to markdown and save
+                    h = html2text.HTML2Text()
+                    h.ignore_links = False
+                    h.ignore_images = False
+                    h.ignore_tables = False
+                    h.body_width = 0
+                    markdown_content = h.handle(html_content)
 
-                # Save content
-                saved_file_path = None
-                if self.request.save_to_file:
-                    saved_file_path = self.save_content(url, markdown_content)
+                    # Save content
+                    saved_file_path = None
+                    if self.request.save_to_file:
+                        saved_file_path = self.save_content(url, markdown_content)
 
-                # Store result
-                self.results.append(PageResult(
-                    url=url,
-                    content=html_content[:1000],
-                    markdown_content=markdown_content,
-                    saved_file_path=saved_file_path,
-                    depth=depth
-                ))
+                    # Store result
+                    self.results.append(PageResult(
+                        url=url,
+                        content=html_content[:1000],
+                        markdown_content=markdown_content,
+                        saved_file_path=saved_file_path,
+                        depth=depth
+                    ))
 
-                # Increment pages processed counter
-                pages_processed += 1
+                    # Increment pages processed counter
+                    pages_processed += 1
 
-                # Mark URL as visited
-                self.visited_urls.add(url)
+                    # Mark URL as visited
+                    self.visited_urls.add(url)
 
-                # Check if we've reached max pages
-                if pages_processed >= self.request.crawler_config.max_pages:
-                    logger.info(f"Reached max pages limit: {self.request.crawler_config.max_pages}")
-                    break
+                    # Check if we've reached max pages
+                    if pages_processed >= self.request.crawler_config.max_pages:
+                        logger.info(f"Reached max pages limit: {self.request.crawler_config.max_pages}")
+                        break
 
-                # Extract and queue new links
-                links = self.extract_links(soup, url)
-                logger.info(f"Found {len(links)} new links to crawl from {url}")
+                    # Extract and queue new links
+                    links = self.extract_links(soup, url)
+                    logger.info(f"Found {len(links)} new links to crawl from {url}")
 
-                for link in links:
-                    if link not in self.visited_urls:
-                        queue.append((link, depth + 1))
+                    for link in links:
+                        if link not in self.visited_urls:
+                            queue.append((link, depth + 1))
 
-                logger.info(f"Queue size: {len(queue)}")
+                    logger.info(f"Queue size: {len(queue)}")
 
-            except Exception as e:
-                logger.error(f"Error processing {url}: {str(e)}")
-                continue
+                    progress = (pages_processed / self.request.crawler_config.max_pages) * 100
+                    await self.send_update(f"Processed {url}", progress=progress)
 
-        logger.info(f"""
-        Crawl completed:
-        - Pages processed: {pages_processed}
-        - Max pages limit: {self.request.crawler_config.max_pages}
-        - Total results: {len(self.results)}
-        """)
+                except Exception as e:
+                    logger.error(f"Error processing {url}: {str(e)}")
+                    continue
 
-        return ScraperResponse(
-            base_url=start_url,
-            pages_crawled=self.results,
-            total_pages=len(self.results),
-            status="success"
-        )
+            await self.send_update("Crawl completed successfully", 100)
+            logger.info(f"""
+            Crawl completed:
+            - Pages processed: {pages_processed}
+            - Max pages limit: {self.request.crawler_config.max_pages}
+            - Total results: {len(self.results)}
+            """)
+
+            return ScraperResponse(
+                base_url=start_url,
+                pages_crawled=self.results,
+                total_pages=len(self.results),
+                status="success"
+            )
+        except Exception as e:
+            await self.send_update(f"Error: {str(e)}", -1)
+            raise
 
     async def cleanup_files(self):
         """Cleanup temporary files and empty directories"""
