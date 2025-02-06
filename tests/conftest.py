@@ -2,6 +2,8 @@ import pytest
 import logging
 from pathlib import Path
 import shutil
+import pytest_asyncio
+from app.schemas.scraper import ScraperRequest, CrawlerConfig
 
 # Minimal configuration, no pytest_configure
 @pytest.fixture(autouse=True)
@@ -20,13 +22,6 @@ def cleanup_files():
         dir_path = Path(dir_name)
         if dir_path.exists():
             shutil.rmtree(dir_path)
-
-import pytest
-import pytest_asyncio
-from app.schemas.scraper import ScraperRequest, CrawlerConfig
-
-# Configure asyncio
-pytest.register_assert_rewrite('pytest_asyncio')
 
 @pytest.fixture
 def sample_request():
@@ -50,16 +45,3 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
-
-def pytest_configure(config):
-    config.addinivalue_line(
-        "asyncio_mode",
-        "strict"
-    )
-    config.addinivalue_line(
-        "asyncio_fixture_loop_scope",
-        "function"
-    )
-
-# Configure pytest-asyncio
-pytest_plugins = ['pytest_asyncio']

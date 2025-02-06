@@ -1,0 +1,45 @@
+name: Documentation Improvement
+description: Suggest improvements to our documentation
+title: "[Docs]: "
+labels: ["documentation"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve our documentation!
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of documentation change
+      options:
+        - New documentation
+        - Correction to existing documentation
+        - Clarification needed
+        - Example needed
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is the documentation you're referring to? (URL or file path)
+      placeholder: "e.g., /docs/getting-started.md or https://..."
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be changed?
+      description: Describe what needs to be added or modified
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested changes
+      description: If you have specific wording in mind, please share it

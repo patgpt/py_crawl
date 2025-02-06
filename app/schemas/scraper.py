@@ -13,7 +13,10 @@ class CrawlerConfig(BaseModel):
         include_patterns (list[str]): Regex patterns for URLs to include
         exclude_patterns (list[str]): Regex patterns for URLs to exclude
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra='forbid'
+    )
     max_depth: int = Field(
         default=3,
         ge=0,
@@ -58,14 +61,17 @@ class ScraperRequest(BaseModel):
         wait_time (float): Time to wait between requests in seconds
         crawler_config (CrawlerConfig): Configuration for crawler behavior
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra='forbid'
+    )
     url: AnyHttpUrl
     selector: Optional[str] = None
     save_to_file: bool = True
     use_proxy: bool = False
     custom_headers: Optional[dict] = None
     wait_time: float = Field(default=1.0, ge=0.001, le=30.0)
-    crawler_config: CrawlerConfig = CrawlerConfig()
+    crawler_config: CrawlerConfig = Field(default_factory=lambda: CrawlerConfig())
 
     @field_validator('wait_time')
     def validate_wait_time(cls, v):
@@ -84,6 +90,7 @@ class PageResult(BaseModel):
         saved_file_path (str | None): Path to saved file
         depth (int): Crawl depth of this page
     """
+    model_config = ConfigDict(extra='forbid')
     url: str
     content: str
     markdown_content: Optional[str] = None
@@ -100,6 +107,7 @@ class ScraperResponse(BaseModel):
         total_pages (int): Total number of pages crawled
         status (str): Status of the crawling operation
     """
+    model_config = ConfigDict(extra='forbid')
     base_url: str
     pages_crawled: List[PageResult]
     total_pages: int
