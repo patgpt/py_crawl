@@ -1,0 +1,51 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Project specific
+content/
+debug/
+downloads/
+*.zip
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+docs/
+*.md
+!README.md
+!LICENSE.md
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
