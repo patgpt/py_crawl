@@ -1,8 +1,10 @@
-name: Documentation Improvement
-description: Suggest improvements to our documentation
+name: "Documentation Improvement"
+description: "Suggest improvements to our documentation"
 title: "[Docs]: "
-labels: ["documentation"]
-assignees: []
+labels:
+  - "documentation"
+assignees:
+  - "yourusername"
 
 body:
   - type: markdown
